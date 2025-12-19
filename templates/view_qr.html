@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Your QR Code</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #eef2f7;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
+
+        img {
+            width: 220px;
+            margin-top: 15px;
+        }
+
+        .used {
+            color: red;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+<div class="card">
+    <h2>Your Event QR</h2>
+    <p>{{ email }}</p>
+
+    <img src="/static/qr/{{ token }}.png">
+
+    {% if scanned == 1 %}
+        <div class="used">Already Used</div>
+    {% endif %}
+</div>
+</body>
+</html>

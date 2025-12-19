@@ -1,0 +1,19 @@
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<h3>Scan QR Code</h3>
+<div id="reader" style="width:300px"></div>
+
+<script>
+const scanner = new Html5Qrcode("reader");
+
+scanner.start(
+  { facingMode: "environment" },
+  { fps: 10, qrbox: 250 },
+  (text) => {
+    fetch("/verify?token=" + text)
+      .then(res => res.text())
+      .then(alert);
+    scanner.stop();
+  }
+);
+</script>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>QR Attendance System</title>
+
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Poppins', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .card {
+            width: 440px;
+            padding: 32px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            margin: 0 0 24px;
+            text-align: center;
+            font-size: 26px;
+            font-weight: 700;
+            color: #2d2d2d;
+        }
+
+        .stats {
+            margin-bottom: 28px;
+        }
+
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 18px;
+            margin-bottom: 12px;
+            border-radius: 10px;
+            background: #f4f6fb;
+            font-size: 15px;
+        }
+
+        .stat span {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .buttons a {
+            display: block;
+            text-align: center;
+            padding: 14px;
+            margin-bottom: 14px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 15px;
+            color: white;
+            transition: all 0.25s ease;
+        }
+
+        .export {
+            background: linear-gradient(135deg, #43cea2, #185a9d);
+        }
+
+        .upload {
+            background: linear-gradient(135deg, #36d1dc, #5b86e5);
+        }
+
+        .scan {
+            background: linear-gradient(135deg, #a18cd1, #fbc2eb);
+        }
+
+        .buttons a:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.2);
+        }
+
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="card">
+    <h1>QR Attendance System</h1>
+
+    <div class="stats">
+        <div class="stat">
+            <div>Total Participants</div>
+            <span>{{ total }}</span>
+        </div>
+
+        <div class="stat">
+            <div>Attendance Marked</div>
+            <span>{{ scanned }}</span>
+        </div>
+
+        <div class="stat">
+            <div>Remaining</div>
+            <span>{{ remaining }}</span>
+        </div>
+    </div>
+
+    <div class="buttons">
+        <a href="/export" class="export">Export Attendance CSV</a>
+        <a href="/upload" class="upload">Upload Participants CSV</a>
+        <a href="/scan" class="scan">Scan QR Code</a>
+    </div>
+
+    <div class="footer">
+        Hackathon Project • QR-based Attendance System
+    </div>
+</div>
+
+</body>
+</html>
