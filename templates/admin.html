@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Panel</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <div class="container">
+        <h2>QR Attendance System</h2>
+
+        <!-- Stats -->
+        <p style="text-align:center; font-size:14px; color:#555;">
+            Total: {{ total }} |
+            Scanned: {{ scanned }} |
+            Remaining: {{ remaining }}
+        </p>
+
+        <!-- Last scanned (ONLY ONCE) -->
+        <p style="text-align:center; font-size:14px; color:#444;">
+            Last Scanned: <strong>{{ last_scanned }}</strong>
+        </p>
+
+        <!-- Form -->
+        <form method="POST" action="/upload" enctype="multipart/form-data">
+            <label>Event Name</label>
+            <input type="text" name="event" placeholder="Enter event name" required>
+
+            <label>Upload Participants CSV</label>
+            <input type="file" name="file" accept=".csv" required>
+
+            <button type="submit">Generate & Email QR Codes</button>
+        </form>
+
+        <a href="/export">
+            <button style="margin-top:12px;">Export Attendance CSV</button>
+        </a>
+
+        <div class="footer">
+            Admin Panel • Hackathon Project
+        </div>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Scan QR Code</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <div class="container">
+        <h2>Scan QR Code</h2>
+
+        <div id="reader" style="width:280px; margin:auto;"></div>
+
+        <p id="result"></p>
+
+        <div class="footer">
+            Camera-based QR Verification
+        </div>
+    </div>
+
+    <!-- QR Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
+    <script>
+        function onScanSuccess(decodedText) {
+            fetch("/scan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ qr: decodedText })
+            })
+            .then(response => response.text())
+            .then(message => {
+                const result = document.getElementById("result");
+                result.innerText = message;
+
+                if (message.includes("successful")) {
+                    result.style.color = "green";
+                } else {
+                    result.style.color = "red";
+                }
+            });
+        }
+
+        new Html5QrcodeScanner(
+            "reader",
+            { fps: 10, qrbox: 220 }
+        ).render(onScanSuccess);
+    </script>
+
+</body>
+</html>
+

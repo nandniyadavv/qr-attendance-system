@@ -1,216 +1,186 @@
-from flask import Flask, render_template, request, Response
-import sqlite3
-import uuid
+from flask import Flask, render_template, request, send_file
+from flask_mail import Mail, Message
+import pandas as pd
 import qrcode
-import csv
 import os
+import csv
 
 app = Flask(__name__)
 
-# ---------------- DATABASE ----------------
-def get_db():
-    return sqlite3.connect("database.db")
+# ---------------- EMAIL CONFIG ----------------
+app.config["MAIL_SERVER"] = "smtp.gmail.com"
+app.config["MAIL_PORT"] = 587
+app.config["MAIL_USE_TLS"] = True
+app.config["MAIL_USERNAME"] = "nandni.y4115@gmail.com"
+app.config["MAIL_PASSWORD"] = "rhjfyxwyqjvzorpl"
 
-# ---------------- HOME / EVENT-AWARE DASHBOARD ----------------
+mail = Mail(app)
+
+# ---------------- FOLDERS ----------------
+QR_FOLDER = "static/qr"
+os.makedirs(QR_FOLDER, exist_ok=True)
+
+# ---------------- STATS FUNCTION ----------------
+def get_stats():
+    # No participants file or empty → all zero
+    if not os.path.exists("participants.csv"):
+        return 0, 0, 0
+
+    df = pd.read_csv("participants.csv")
+    if df.empty:
+        return 0, 0, 0
+
+    total = len(df)
+    scanned = 0
+
+    if os.path.exists("scanned.csv"):
+        with open("scanned.csv", "r") as f:
+            reader = csv.reader(f)
+            next(reader, None)  # skip header
+            for row in reader:
+                if row:
+                    scanned += 1
+
+    remaining = max(total - scanned, 0)
+    return total, scanned, remaining
+
+# ---------------- ROUTES ----------------
 @app.route("/")
-def home():
-    db = get_db()
-    cur = db.cursor()
+def admin():
+    total, scanned, remaining = get_stats()
 
-    # Get latest event
-    cur.execute("SELECT id, name FROM events ORDER BY id DESC LIMIT 1")
-    event = cur.fetchone()
-
-    if event:
-        event_id, event_name = event
-
-        cur.execute(
-            "SELECT COUNT(*) FROM participants WHERE event_id = ?",
-            (event_id,)
-        )
-        total = cur.fetchone()[0]
-
-        cur.execute(
-            "SELECT COUNT(*) FROM participants WHERE event_id = ? AND scanned = 1",
-            (event_id,)
-        )
-        scanned = cur.fetchone()[0]
-
-    else:
-        event_name = "No Event"
-        total = scanned = 0
-
-    remaining = total - scanned
+    last_scanned = "None"
+    if os.path.exists("last_scanned.txt"):
+        with open("last_scanned.txt", "r") as f:
+            last_scanned = f.read().strip()
 
     return render_template(
-        "index.html",
+        "admin.html",
         total=total,
         scanned=scanned,
         remaining=remaining,
-        event_name=event_name
+        last_scanned=last_scanned
     )
 
-# ---------------- CREATE EVENT ----------------
-@app.route("/create-event", methods=["GET", "POST"])
-def create_event():
-    db = get_db()
-    cur = db.cursor()
 
-    if request.method == "POST":
-        name = request.form["event_name"]
-        cur.execute("INSERT INTO events (name) VALUES (?)", (name,))
-        db.commit()
-        return "Event created successfully!"
 
-    return render_template("create_event.html")
-
-# ---------------- UPLOAD PAGE ----------------
-@app.route("/upload")
+# ---------------- UPLOAD CSV ----------------
+@app.route("/upload", methods=["POST"])
 def upload():
-    db = get_db()
-    cur = db.cursor()
-    cur.execute("SELECT id, name FROM events")
-    events = cur.fetchall()
-    return render_template("upload.html", events=events)
+    event = request.form["event"]
+    file = request.files["file"]
 
-# ---------------- UPLOAD CSV + CLEAR OLD QRS ----------------
-@app.route("/upload-csv", methods=["POST"])
-def upload_csv():
-    event_id = request.form["event_id"]
-    file = request.files["csv"]
+    # Read CSV safely
+    df = pd.read_csv(file)
+    df.columns = [c.strip().lower() for c in df.columns]
 
-    # Clear old QR images
-    qr_folder = "static/qr"
-    if os.path.exists(qr_folder):
-        for f in os.listdir(qr_folder):
-            if f.endswith(".png"):
-                os.remove(os.path.join(qr_folder, f))
+    # Validate CSV
+    if "name" not in df.columns or "email" not in df.columns:
+        return "CSV must contain 'name' and 'email' columns"
 
-    reader = csv.reader(file.stream.read().decode("utf-8").splitlines())
+    # Save participants
+    df.to_csv("participants.csv", index=False)
 
-    db = get_db()
-    cur = db.cursor()
+    # Reset scanned.csv
+    with open("scanned.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["event", "email", "status"])
+    # Reset last scanned on new event
+    if os.path.exists("last_scanned.txt"):
+        os.remove("last_scanned.txt")
 
-    os.makedirs("static/qr", exist_ok=True)
+    # Ensure QR folder exists
+    os.makedirs(QR_FOLDER, exist_ok=True)
 
-    for row in reader:
-        name, email = row
-        token = str(uuid.uuid4())
+    # Generate QR + send email
+    for _, row in df.iterrows():
+        name = str(row["name"])
+        email = str(row["email"])
 
-        img = qrcode.make(token)
-        img.save(f"static/qr/{token}.png")
+        qr_data = f"{event}|{email}"
+        qr = qrcode.make(qr_data)
 
-        cur.execute(
-            "INSERT INTO participants VALUES (?, ?, 0, ?)",
-            (token, email, event_id)
-        )
+        filename = f"{email.replace('@', '_')}.png"
+        qr_path = os.path.join(QR_FOLDER, filename)
+        qr.save(qr_path)
 
-    db.commit()
-    return "QR codes generated successfully!"
+        try:
+            msg = Message(
+                subject=f"Your QR Code for {event}",
+                sender=app.config["MAIL_USERNAME"],
+                recipients=[email]
+            )
+            msg.body = (
+                f"Hello {name},\n\n"
+                f"Please find your QR code for {event} attached.\n\n"
+                "Regards,\nEvent Team"
+            )
+            msg.attach(filename, "image/png", open(qr_path, "rb").read())
+            mail.send(msg)
+        except Exception as e:
+            print("Email error:", e)
 
-# ---------------- SCAN PAGE ----------------
-@app.route("/scan")
+    return "QR Codes generated and emailed successfully!"
+
+
+# ---------------- SCANNER PAGE ----------------
+@app.route("/scanner")
+def scanner():
+    return render_template("scanner.html")
+
+# ---------------- SCAN QR ----------------
+@app.route("/scan", methods=["POST"])
 def scan():
-    return render_template("scan.html")
+    data = request.get_json()
+    qr_data = data.get("qr", "")
 
-# ---------------- VERIFY QR ----------------
-@app.route("/verify")
-def verify():
-    token = request.args.get("token")
-    db = get_db()
-    cur = db.cursor()
+    if "|" not in qr_data:
+        return "❌ Invalid QR code"
 
-    cur.execute("SELECT scanned FROM participants WHERE token = ?", (token,))
-    row = cur.fetchone()
+    event, email = qr_data.split("|", 1)
 
-    if not row:
-        return "Invalid QR ❌"
+    # Prevent duplicate scan
+    with open("scanned.csv", "r") as f:
+        reader = csv.reader(f)
+        next(reader, None)
+        for row in reader:
+            if row and row[0] == event and row[1] == email:
+                return "❌ Already scanned"
 
-    if row[0] == 1:
-        return "Already used ❌"
+    # Save scan
+    with open("scanned.csv", "a", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([event, email, "Present"])
 
-    cur.execute("UPDATE participants SET scanned = 1 WHERE token = ?", (token,))
-    db.commit()
-    return "Attendance marked ✅"
+    # 🔴 FIND NAME FROM participants.csv
+    scanned_name = email  # fallback
+    if os.path.exists("participants.csv"):
+        df = pd.read_csv("participants.csv")
+        df.columns = [c.strip().lower() for c in df.columns]
 
-# ---------------- VIEW QR ----------------
-@app.route("/view-qr/<token>")
-def view_qr(token):
-    db = get_db()
-    cur = db.cursor()
+        match = df[df["email"] == email]
+        if not match.empty:
+            scanned_name = match.iloc[0]["name"]
 
-    cur.execute(
-        "SELECT email, scanned FROM participants WHERE token = ?",
-        (token,)
-    )
-    row = cur.fetchone()
+    # 🔴 WRITE LAST SCANNED (CONFIRMED)
+    with open("last_scanned.txt", "w") as f:
+        f.write(scanned_name)
 
-    if not row:
-        return "QR not found"
+    print("LAST SCANNED WRITTEN:", scanned_name)  # debug proof
 
-    email, scanned = row
+    return "✅ Scan successful"
 
-    return render_template(
-        "view_qr.html",
-        token=token,
-        email=email,
-        scanned=scanned
-    )
 
 # ---------------- EXPORT CSV ----------------
 @app.route("/export")
 def export_csv():
-    db = get_db()
-    cur = db.cursor()
-
-    # Export only latest event
-    cur.execute("SELECT id FROM events ORDER BY id DESC LIMIT 1")
-    event = cur.fetchone()
-
-    if not event:
-        return "No event data to export"
-
-    event_id = event[0]
-
-    cur.execute(
-        "SELECT email, scanned FROM participants WHERE event_id = ?",
-        (event_id,)
-    )
-    rows = cur.fetchall()
-
-    def generate():
-        yield "Email,Scanned\n"
-        for email, scanned in rows:
-            yield f"{email},{scanned}\n"
-
-    return Response(
-        generate(),
-        mimetype="text/csv",
-        headers={"Content-Disposition": "attachment;filename=attendance.csv"}
+    return send_file(
+        "scanned.csv",
+        as_attachment=True,
+        download_name="attendance.csv"
     )
 
-# ---------------- START APP ----------------
+# ---------------- RUN ----------------
 if __name__ == "__main__":
-    db = get_db()
-    cur = db.cursor()
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT
-    )
-    """)
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS participants (
-        token TEXT PRIMARY KEY,
-        email TEXT,
-        scanned INTEGER,
-        event_id INTEGER
-    )
-    """)
-
-    db.commit()
     app.run(debug=True)
-
 
