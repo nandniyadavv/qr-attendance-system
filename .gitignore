@@ -1,6 +1,6 @@
-venv/
-__pycache__/
-*.pyc
-.env
+participants.csv
+scanned.csv
 last_scanned.txt
 static/qr/
+__pycache__/
+*.pyc
